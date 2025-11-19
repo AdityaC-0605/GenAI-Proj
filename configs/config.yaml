@@ -1,0 +1,56 @@
+# Main configuration file for Cross-Lingual QA System
+
+defaults:
+  - model: mbert
+  - training: zero_shot
+  - dataset: squad
+  - _self_
+
+# Experiment settings
+experiment:
+  name: clqa_baseline
+  seed: 42
+  output_dir: experiments
+  log_level: INFO
+
+# Model settings
+model:
+  type: mbert  # mbert or mt5
+  checkpoint: null  # Path to checkpoint (null for pretrained)
+
+# Training settings
+training:
+  mode: zero_shot  # zero_shot or few_shot
+  device: null  # Auto-detect if null
+
+# Dataset settings
+dataset:
+  name: squad
+  split: train
+  cache_dir: data/cache
+
+# Evaluation settings
+evaluation:
+  batch_size: 32
+  save_predictions: true
+  output_dir: experiments/evaluations
+
+# Inference settings
+inference:
+  batch_size: 16
+  max_batch_wait_ms: 100
+  enable_caching: true
+
+# Logging
+logging:
+  log_dir: logs
+  tensorboard: false
+  wandb: false
+  mlflow: false
+
+# Paths
+paths:
+  data_dir: data
+  models_dir: models
+  experiments_dir: experiments
+  cache_dir: cache

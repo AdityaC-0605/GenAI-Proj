@@ -1,0 +1,37 @@
+# XQuAD dataset configuration
+
+dataset_name: xquad
+dataset_version: "1.0"
+dataset_type: extractive
+
+# Data paths
+data_dir: data/xquad
+
+# Languages (11 languages)
+languages:
+  - en  # English
+  - es  # Spanish
+  - de  # German
+  - el  # Greek
+  - ru  # Russian
+  - tr  # Turkish
+  - ar  # Arabic
+  - vi  # Vietnamese
+  - th  # Thai
+  - zh  # Chinese
+  - hi  # Hindi
+
+# Dataset characteristics
+has_unanswerable: false
+num_examples_per_language: 1190
+total_examples: 13090
+
+# Loading parameters
+use_huggingface: true
+hf_dataset_name: xquad
+hf_dataset_config: null
+
+# Preprocessing
+max_seq_length: 384
+doc_stride: 128
+max_query_length: 64

@@ -1,0 +1,430 @@
+# Implementation Plan
+
+- [x] 1. Set up project structure and core interfaces
+  - Create directory structure for data, models, src, experiments, configs, tests, and api components
+  - Define base abstract classes: `BaseDatasetLoader`, `QAModelWrapper`, `BasePreprocessor`
+  - Create core data models: `QAExample`, `Answer`, `QAPrediction`, `EvaluationResult`, `ExperimentConfig`
+  - Set up configuration management with Hydra (config.yaml structure)
+  - Initialize Python package with `__init__.py` files and proper imports
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5_
+
+- [x] 2. Implement data processing module
+  - [x] 2.1 Create dataset loaders for each supported dataset
+    - Implement `XQuADLoader` class with load() and get_language_pairs() methods
+    - Implement `MLQALoader` class with dataset-specific parsing logic
+    - Implement `TyDiQALoader` class with typologically diverse language handling
+    - Implement `SQuADLoader` class for English baseline data
+    - Create unified dataset registry for easy loader selection
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+  - [x] 2.2 Implement multilingual preprocessor
+    - Create `MultilingualPreprocessor` class with script detection (Latin, Cyrillic, Arabic, CJK)
+    - Implement text normalization (Unicode NFC, whitespace handling)
+    - Implement tokenization logic using Hugging Face tokenizers
+    - Add language-specific cleaning functions
+    - _Requirements: 1.1, 1.2_
+  - [x] 2.3 Create data validator
+    - Implement validation checks for non-empty fields (question, answer, context)
+    - Verify answer span exists within context
+    - Validate language codes against supported languages
+    - Add length constraint validation (max tokens)
+    - _Requirements: 1.4_
+  - [x] 2.4 Implement data splitter
+    - Create stratified splitting logic by language pair
+    - Implement 80/10/10 train/validation/test split
+    - Add seed-based reproducibility
+    - Implement few-shot sampling with balanced language representation
+    - _Requirements: 1.5_
+  - [x] 2.5 Create dataset statistics generator
+    - Calculate language distribution across dataset
+    - Generate answer length distribution statistics
+    - Analyze question type distribution (what, when, where, who, why, how)
+    - Create visualization functions for dataset statistics
+    - _Requirements: 1.3_
+
+- [x] 3. Implement mBERT question answering model
+  - [x] 3.1 Create mBERT model architecture
+    - Implement `MBERTQuestionAnswering` class extending nn.Module
+    - Load pretrained "bert-base-multilingual-cased" model
+    - Add linear layer for start/end position prediction (qa_outputs)
+    - Implement forward() method with input_ids, attention_mask, token_type_ids
+    - _Requirements: 2.1, 2.3_
+  - [x] 3.2 Implement answer extraction logic
+    - Create extract_answer() method with start/end logit processing
+    - Implement answer span extraction with max_answer_length constraint (30 tokens)
+    - Calculate confidence scores from logit probabilities
+    - Handle edge cases (no valid span, empty answer)
+    - _Requirements: 2.1_
+  - [x] 3.3 Create mBERT model wrapper
+    - Implement `MBERTModelWrapper` class inheriting from `QAModelWrapper`
+    - Implement predict() method for single question-context pairs
+    - Implement train_step() method with loss calculation
+    - Implement eval_step() method returning predictions and confidences
+    - Add device management (MPS/CPU/CUDA)
+    - _Requirements: 2.1, 2.5_
+  - [ ]* 3.4 Write unit tests for mBERT model
+    - Test model initialization and weight loading
+    - Test forward pass with sample inputs
+    - Test answer extraction with various span positions
+    - Test confidence score calculation
+    - _Requirements: 2.1, 2.3_
+
+- [x] 4. Implement mT5 question answering model
+  - [x] 4.1 Create mT5 model architecture
+    - Implement `MT5QuestionAnswering` class extending nn.Module
+    - Load pretrained "google/mt5-base" model
+    - Initialize T5Tokenizer for input formatting
+    - Implement forward() method with encoder-decoder logic
+    - _Requirements: 2.2, 2.4_
+  - [x] 4.2 Implement answer generation logic
+    - Create generate_answer() method with beam search (num_beams=4)
+    - Format input as "question: <q> context: <c>"
+    - Implement max_length constraint (50 tokens)
+    - Generate multiple answer candidates with scores
+    - _Requirements: 2.2_
+  - [x] 4.3 Create mT5 model wrapper
+    - Implement `MT5ModelWrapper` class inheriting from `QAModelWrapper`
+    - Implement predict() method for generative QA
+    - Implement train_step() method with sequence-to-sequence loss
+    - Implement eval_step() method with generated answers
+    - Add device management (MPS/CPU/CUDA)
+    - _Requirements: 2.2, 2.5_
+  - [ ]* 4.4 Write unit tests for mT5 model
+    - Test model initialization and weight loading
+    - Test generation with sample inputs
+    - Test input formatting (question: ... context: ...)
+    - Test beam search output
+    - _Requirements: 2.2, 2.4_
+
+- [x] 5. Implement device scheduler for Apple Silicon optimization
+  - [x] 5.1 Create DeviceScheduler class
+    - Implement _get_optimal_device() method (MPS > CUDA > CPU priority)
+    - Implement to_device() method with automatic fallback
+    - Track unsupported operations for MPS backend
+    - Add memory monitoring for unified memory usage
+    - _Requirements: 9.1, 9.2, 9.4_
+  - [x] 5.2 Implement mixed precision training support
+    - Add FP16 training configuration for MPS backend
+    - Implement gradient scaling for mixed precision
+    - Add automatic fallback to FP32 for unsupported ops
+    - _Requirements: 9.1_
+  - [x] 5.3 Implement gradient accumulation
+    - Create gradient accumulation logic for simulating larger batches
+    - Add configuration for accumulation steps
+    - Implement proper gradient normalization across accumulation steps
+    - _Requirements: 9.3_
+
+- [x] 6. Implement zero-shot training pipeline
+  - [x] 6.1 Create zero-shot trainer class
+    - Implement `ZeroShotTrainer` class with model, optimizer, and scheduler
+    - Load English SQuAD 2.0 training data
+    - Implement training loop with epoch iteration
+    - Add gradient clipping (max_norm=1.0)
+    - Implement checkpoint saving every epoch
+    - _Requirements: 3.1, 3.4_
+  - [x] 6.2 Implement optimizer and scheduler
+    - Configure AdamW optimizer with learning_rate=3e-5
+    - Implement linear warmup schedule (warmup_ratio=0.1)
+    - Add learning rate logging
+    - _Requirements: 3.1_
+  - [x] 6.3 Add early stopping mechanism
+    - Implement early stopping based on validation loss
+    - Configure patience parameter (default: 3 epochs)
+    - Save best model checkpoint
+    - _Requirements: 3.1_
+  - [x] 6.4 Create training configuration
+    - Define zero_shot.yaml config with hyperparameters
+    - Set batch_size=16, gradient_accumulation_steps=4
+    - Configure num_epochs=3, max_seq_length=384, doc_stride=128
+    - _Requirements: 3.1, 3.2_
+  - [ ]* 6.5 Write integration tests for zero-shot training
+    - Test training loop for 1 epoch with small dataset
+    - Test checkpoint saving and loading
+    - Test early stopping trigger
+    - _Requirements: 3.1, 3.2, 3.4_
+
+- [x] 7. Implement few-shot training pipeline
+  - [x] 7.1 Create few-shot sampler
+    - Implement stratified sampling for k examples per language pair (k ∈ {1, 5, 10, 50})
+    - Ensure diverse question type representation
+    - Add seed-based reproducibility
+    - Balance sampling across all language pairs
+    - _Requirements: 4.1, 4.2_
+  - [x] 7.2 Create few-shot trainer class
+    - Implement `FewShotTrainer` class loading from zero-shot checkpoint
+    - Use lower learning rate (1e-5) to prevent overfitting
+    - Implement training loop with sampled examples
+    - Add early stopping (patience=3)
+    - _Requirements: 4.1, 4.3_
+  - [x] 7.3 Create few-shot configuration
+    - Define few_shot.yaml config with hyperparameters
+    - Set batch_size=8, num_epochs=10
+    - Configure num_shots parameter (1, 5, 10, 50)
+    - _Requirements: 4.1, 4.2_
+  - [x] 7.4 Implement learning curve generation
+    - Track performance metrics for each shot count (1, 5, 10, 50)
+    - Generate plots showing performance vs number of shots
+    - Save learning curve data for analysis
+    - _Requirements: 4.4_
+
+- [x] 8. Implement evaluation module
+  - [x] 8.1 Create metrics calculator
+    - Implement exact_match() with text normalization (lowercase, punctuation removal, article removal)
+    - Implement token-level f1_score() calculation
+    - Implement bleu_score() for generative models (mT5)
+    - Implement rouge_scores() (ROUGE-1, ROUGE-2, ROUGE-L)
+    - _Requirements: 7.1, 7.2, 7.3_
+  - [x] 8.2 Implement statistical analysis
+    - Create paired t-test for mBERT vs mT5 comparison (significance level=0.05)
+    - Implement bootstrap confidence intervals (95%)
+    - Calculate effect size (Cohen's d)
+    - Add Bonferroni correction for multiple comparisons
+    - _Requirements: 7.5_
+  - [x] 8.3 Create evaluation runner
+    - Implement evaluation loop for all language pairs
+    - Calculate metrics for each language pair separately
+    - Aggregate results across language pairs
+    - Save evaluation results in JSON format
+    - _Requirements: 3.2, 7.4_
+  - [ ]* 8.4 Write unit tests for metrics
+    - Test exact_match with various normalization cases
+    - Test f1_score calculation with sample predictions
+    - Test BLEU and ROUGE score calculations
+    - _Requirements: 7.1, 7.2, 7.3_
+
+- [x] 9. Implement model comparison framework
+  - [x] 9.1 Create comparison analyzer
+    - Implement side-by-side performance comparison (F1, EM across language pairs)
+    - Calculate transfer efficiency ratio (cross-lingual / monolingual performance)
+    - Measure inference latency and throughput for both models
+    - Track memory footprint and training time
+    - _Requirements: 8.1, 8.2, 8.3_
+  - [x] 9.2 Implement language pair categorization
+    - Categorize language pairs: high-to-high, high-to-low, similar families, distant families
+    - Calculate average performance per category
+    - Identify best model for each category
+    - _Requirements: 8.4_
+  - [x] 9.3 Create comparison report generator
+    - Generate ModelComparison dataclass with all comparison dimensions
+    - Create structured comparison report with statistical significance
+    - Identify scenarios where each model excels
+    - _Requirements: 8.1, 8.4_
+
+- [x] 10. Implement error analysis module
+  - [x] 10.1 Create error categorizer
+    - Implement error classification: no answer, partial answer, incorrect answer, wrong language, hallucination
+    - Categorize each prediction error by type
+    - Track error distribution across categories
+    - _Requirements: 12.1_
+  - [x] 10.2 Implement error correlation analysis
+    - Analyze error correlation with question types (what, when, where, who, why, how)
+    - Calculate error correlation with linguistic distance
+    - Generate confusion matrix by question type
+    - _Requirements: 12.2_
+  - [x] 10.3 Create error examples extractor
+    - Extract representative error examples for each category
+    - Save error cases with context for qualitative analysis
+    - _Requirements: 12.1_
+
+- [x] 11. Implement visualization module
+  - [x] 11.1 Create performance visualizations
+    - Generate performance heatmap (6x9 grid for language pairs)
+    - Create training/validation loss curves
+    - Plot few-shot learning curves (performance vs shots)
+    - _Requirements: 12.3, 12.4_
+  - [x] 11.2 Create error visualizations
+    - Generate error distribution bar charts by category
+    - Create scatter plot of performance vs linguistic distance
+    - Visualize confusion matrix for question types
+    - _Requirements: 12.2, 12.3_
+  - [x] 11.3 Generate HTML report
+    - Create interactive HTML report with all visualizations
+    - Include performance heatmaps, learning curves, error distributions
+    - Add summary statistics and key findings
+    - _Requirements: 12.4_
+
+- [x] 12. Implement experiment tracking
+  - [x] 12.1 Create experiment tracker
+    - Implement logging of all hyperparameters (learning rate, batch size, epochs, seed)
+    - Log model architecture details and configuration
+    - Track training/validation metrics per epoch
+    - Record system information (device, memory, PyTorch version)
+    - _Requirements: 11.1, 11.2_
+  - [x] 12.2 Implement checkpoint manager
+    - Save model checkpoints with metadata (timestamp, config, metrics)
+    - Implement checkpoint loading with validation
+    - Add checkpoint cleanup for disk space management
+    - _Requirements: 11.2_
+  - [x] 12.3 Integrate Weights & Biases or MLflow
+    - Set up W&B or MLflow project
+    - Log experiments with all tracked information
+    - Create experiment comparison dashboard
+    - _Requirements: 11.1, 11.3_
+
+- [x] 13. Implement inference engine
+  - [x] 13.1 Create model manager
+    - Implement `ModelManager` class with lazy loading
+    - Add model caching to avoid repeated loading
+    - Implement memory-aware model management
+    - Support loading multiple model versions
+    - _Requirements: 6.2_
+  - [x] 13.2 Create request handler
+    - Implement request validation (required fields, language codes, text length)
+    - Add dynamic batching for throughput optimization (max batch size: 32)
+    - Implement timeout-based batch flushing
+    - _Requirements: 6.1, 6.5_
+  - [x] 13.3 Implement prediction pipeline
+    - Create end-to-end prediction flow from request to response
+    - Add confidence score calculation
+    - Implement answer candidate ranking
+    - Measure and log processing time
+    - _Requirements: 6.1, 6.2_
+  - [x] 13.4 Create response formatter
+    - Format predictions into standardized JSON response
+    - Include answer, confidence, positions, processing time, model info
+    - Handle both extractive (mBERT) and generative (mT5) outputs
+    - _Requirements: 6.4_
+  - [ ]* 13.5 Write integration tests for inference
+    - Test end-to-end inference pipeline
+    - Test batch processing
+    - Test latency requirements (<500ms)
+    - _Requirements: 6.1, 6.5_
+
+- [x] 14. Implement API gateway
+  - [x] 14.1 Create FastAPI application
+    - Set up FastAPI app with CORS middleware
+    - Define request/response schemas (QARequest, QAResponse)
+    - Implement health check endpoint
+    - _Requirements: 6.3_
+  - [x] 14.2 Implement prediction endpoints
+    - Create POST /predict endpoint for single QA
+    - Create POST /predict/batch endpoint for batch QA
+    - Add request validation and error handling
+    - _Requirements: 6.3, 6.4_
+  - [x] 14.3 Implement utility endpoints
+    - Create GET /models endpoint to list available models
+    - Create GET /languages endpoint to list supported language pairs
+    - Add model selection parameter to prediction endpoints
+    - _Requirements: 5.1, 5.2, 5.3, 5.4_
+  - [x] 14.4 Add API authentication and rate limiting
+    - Implement API key-based authentication (optional)
+    - Add token bucket rate limiting (100 requests/minute)
+    - Create middleware for authentication and rate limiting
+    - _Requirements: 6.3_
+  - [ ]* 14.5 Write API integration tests
+    - Test all endpoints with sample requests
+    - Test error handling for invalid inputs
+    - Test rate limiting behavior
+    - _Requirements: 6.3, 6.4_
+
+- [x] 15. Implement language detection and validation
+  - [x] 15.1 Create language detector
+    - Implement automatic language detection for questions and documents
+    - Use langdetect or fasttext for detection
+    - Add confidence threshold for detection
+    - _Requirements: 5.4_
+  - [x] 15.2 Create language pair validator
+    - Validate language codes against supported languages (en, es, fr, de, zh, ar, hi, ja, ko)
+    - Verify language pair is in supported combinations (36+ pairs)
+    - Return clear error messages for unsupported pairs
+    - _Requirements: 5.1, 5.2, 5.3_
+
+- [x] 16. Create training scripts and CLI
+  - [x] 16.1 Create zero-shot training script
+    - Implement train_zero_shot.py with argument parsing
+    - Support model selection (mbert, mt5)
+    - Add configuration override via command line
+    - Integrate with experiment tracker
+    - _Requirements: 3.1, 3.2_
+  - [x] 16.2 Create few-shot training script
+    - Implement train_few_shot.py with argument parsing
+    - Support shot count selection (1, 5, 10, 50)
+    - Load from zero-shot checkpoint
+    - _Requirements: 4.1, 4.2, 4.3_
+  - [x] 16.3 Create evaluation script
+    - Implement evaluate.py for running evaluations
+    - Support multiple language pairs and datasets
+    - Generate evaluation reports automatically
+    - _Requirements: 3.2, 7.4_
+  - [x] 16.4 Create comparison script
+    - Implement compare_models.py for side-by-side comparison
+    - Load results from multiple experiments
+    - Generate comparison visualizations and reports
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+
+- [x] 17. Create configuration files
+  - [x] 17.1 Create model configurations
+    - Define configs/model/mbert.yaml with architecture parameters
+    - Define configs/model/mt5.yaml with architecture parameters
+    - _Requirements: 2.1, 2.2, 2.3, 2.4_
+  - [x] 17.2 Create training configurations
+    - Define configs/training/zero_shot.yaml with hyperparameters
+    - Define configs/training/few_shot.yaml with hyperparameters
+    - _Requirements: 3.1, 4.1_
+  - [x] 17.3 Create dataset configurations
+    - Define configs/dataset/xquad.yaml with paths and parameters
+    - Define configs/dataset/mlqa.yaml with paths and parameters
+    - Define configs/dataset/tydiqa.yaml with paths and parameters
+    - Define configs/dataset/squad.yaml with paths and parameters
+    - _Requirements: 10.1, 10.2, 10.3, 10.4_
+  - [x] 17.4 Create main configuration
+    - Define configs/config.yaml as main entry point
+    - Set up Hydra defaults and composition
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+
+- [x] 18. Create requirements and setup files
+  - [x] 18.1 Create requirements.txt
+    - List all Python dependencies: torch, transformers, fastapi, hydra-core, etc.
+    - Specify version constraints for reproducibility
+    - Separate dev dependencies (pytest, black, etc.)
+    - _Requirements: 2.5, 9.1_
+  - [x] 18.2 Create setup.py or pyproject.toml
+    - Define package metadata and dependencies
+    - Configure entry points for CLI scripts
+    - Set up package installation
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+  - [x] 18.3 Create Docker configuration
+    - Write Dockerfile for containerized deployment
+    - Create docker-compose.yaml for local development
+    - Add .dockerignore file
+    - _Requirements: 6.3_
+
+- [x] 19. Implement end-to-end experiment workflows
+  - [x] 19.1 Create baseline experiment workflow
+    - Implement script to run complete baseline experiment (zero-shot for both models)
+    - Evaluate on all language pairs
+    - Generate comparison report
+    - _Requirements: 3.1, 3.2, 7.4, 8.1_
+  - [x] 19.2 Create few-shot experiment workflow
+    - Implement script to run few-shot experiments for all shot counts (1, 5, 10, 50)
+    - Generate learning curves
+    - Compare with zero-shot baseline
+    - _Requirements: 4.1, 4.2, 4.3, 4.4_
+  - [x] 19.3 Create language pair analysis workflow
+    - Implement script to analyze performance by language pair category
+    - Generate category-specific insights
+    - Create visualizations for each category
+    - _Requirements: 8.4, 12.3_
+
+- [x] 20. Create documentation and examples
+  - [x] 20.1 Write README.md
+    - Document project overview and features
+    - Add installation instructions for macOS
+    - Include quick start guide
+    - Document API usage examples
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+  - [x] 20.2 Create example notebooks
+    - Create notebook for data exploration and statistics
+    - Create notebook for model training walkthrough
+    - Create notebook for evaluation and visualization
+    - Create notebook for API usage examples
+    - _Requirements: 1.3, 3.1, 7.4, 12.4_
+  - [ ]* 20.3 Write API documentation
+    - Document all API endpoints with examples
+    - Create OpenAPI/Swagger documentation
+    - Add authentication and rate limiting documentation
+    - _Requirements: 6.3, 6.4_
+  - [ ]* 20.4 Create architecture documentation
+    - Document system architecture and design decisions
+    - Create component interaction diagrams
+    - Document configuration system
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_

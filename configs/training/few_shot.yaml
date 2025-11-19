@@ -1,0 +1,41 @@
+# Few-shot training configuration
+
+mode: few_shot
+base_checkpoint: null  # Path to zero-shot checkpoint (e.g., models/checkpoints/zero_shot/best_model.pt)
+
+# Few-shot settings
+num_shots: 10  # Options: 1, 5, 10, 50
+stratified_sampling: true
+balance_question_types: true
+random_seed: 42
+
+# Training hyperparameters
+batch_size: 8
+gradient_accumulation_steps: 2  # Effective batch size: 16
+num_epochs: 10
+warmup_ratio: 0.1
+learning_rate: 1e-5  # Lower learning rate to prevent overfitting
+max_grad_norm: 1.0
+
+# Data processing
+max_seq_length: 384
+doc_stride: 128
+max_query_length: 64
+max_answer_length: 30
+
+# Optimization
+use_mixed_precision: true
+gradient_checkpointing: false
+
+# Early stopping
+early_stopping_patience: 3
+early_stopping_metric: validation_loss
+
+# Checkpointing
+checkpoint_dir: models/checkpoints/few_shot
+save_strategy: epoch
+save_total_limit: 3
+load_best_model_at_end: true
+
+# Device
+device: null  # Auto-detect (MPS > CUDA > CPU)

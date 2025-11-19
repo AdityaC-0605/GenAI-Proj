@@ -1,0 +1,26 @@
+# mBERT model configuration
+
+model_type: mbert
+model_name: bert-base-multilingual-cased
+
+# Architecture parameters
+hidden_size: 768
+num_hidden_layers: 12
+num_attention_heads: 12
+intermediate_size: 3072
+vocab_size: 119547
+
+# QA-specific parameters
+max_seq_length: 384
+doc_stride: 128
+max_query_length: 64
+max_answer_length: 30
+
+# Model characteristics
+num_parameters: 110M
+supports_extractive: true
+supports_generative: false
+
+# Tokenizer
+tokenizer_name: bert-base-multilingual-cased
+do_lower_case: false

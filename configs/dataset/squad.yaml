@@ -1,0 +1,29 @@
+# SQuAD 2.0 dataset configuration
+
+dataset_name: squad
+dataset_version: "2.0"
+dataset_type: extractive
+
+# Data paths
+data_dir: data/squad
+train_file: train-v2.0.json
+dev_file: dev-v2.0.json
+
+# Languages
+languages:
+  - en
+
+# Dataset characteristics
+has_unanswerable: true
+num_train_examples: 130319
+num_dev_examples: 11873
+
+# Loading parameters
+use_huggingface: true
+hf_dataset_name: squad_v2
+hf_dataset_config: null
+
+# Preprocessing
+max_seq_length: 384
+doc_stride: 128
+max_query_length: 64

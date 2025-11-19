@@ -1,0 +1,35 @@
+# Zero-shot training configuration
+
+mode: zero_shot
+train_language: en
+
+# Training hyperparameters
+batch_size: 16
+gradient_accumulation_steps: 4  # Effective batch size: 64
+num_epochs: 3
+warmup_ratio: 0.1
+learning_rate: 3e-5
+max_grad_norm: 1.0
+
+# Data processing
+max_seq_length: 384
+doc_stride: 128
+max_query_length: 64
+max_answer_length: 30
+
+# Optimization
+use_mixed_precision: true
+gradient_checkpointing: false
+
+# Early stopping
+early_stopping_patience: 3
+early_stopping_metric: validation_loss
+
+# Checkpointing
+checkpoint_dir: models/checkpoints/zero_shot
+save_strategy: epoch
+save_total_limit: 3
+load_best_model_at_end: true
+
+# Device
+device: null  # Auto-detect (MPS > CUDA > CPU)

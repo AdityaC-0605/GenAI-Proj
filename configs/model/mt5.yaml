@@ -1,0 +1,30 @@
+# mT5 model configuration
+
+model_type: mt5
+model_name: google/mt5-base
+
+# Architecture parameters
+d_model: 768
+d_ff: 2048
+num_layers: 12
+num_heads: 12
+vocab_size: 250112
+
+# QA-specific parameters
+max_input_length: 512
+max_output_length: 50
+num_beams: 4
+
+# Model characteristics
+num_parameters: 580M
+supports_extractive: false
+supports_generative: true
+
+# Tokenizer
+tokenizer_name: google/mt5-base
+
+# Generation parameters
+temperature: 1.0
+top_k: 50
+top_p: 0.95
+repetition_penalty: 1.0

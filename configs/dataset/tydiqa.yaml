@@ -1,0 +1,42 @@
+# TyDi QA dataset configuration
+
+dataset_name: tydiqa
+dataset_version: "1.0"
+dataset_type: extractive
+
+# Data paths
+data_dir: data/tydiqa
+
+# Languages (11 typologically diverse languages)
+languages:
+  - en  # English
+  - ar  # Arabic
+  - bn  # Bengali
+  - fi  # Finnish
+  - id  # Indonesian
+  - ko  # Korean
+  - ru  # Russian
+  - sw  # Swahili
+  - te  # Telugu
+  - th  # Thai
+  - ja  # Japanese
+
+# Dataset characteristics
+has_unanswerable: true
+typologically_diverse: true
+includes_low_resource: true
+
+# Dataset splits
+splits:
+  - train
+  - dev
+
+# Loading parameters
+use_huggingface: true
+hf_dataset_name: tydiqa
+hf_dataset_config: primary_task
+
+# Preprocessing
+max_seq_length: 384
+doc_stride: 128
+max_query_length: 64

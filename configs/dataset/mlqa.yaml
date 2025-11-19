@@ -1,0 +1,39 @@
+# MLQA dataset configuration
+
+dataset_name: mlqa
+dataset_version: "1.0"
+dataset_type: extractive
+
+# Data paths
+data_dir: data/mlqa
+
+# Languages (7 languages)
+languages:
+  - en  # English
+  - es  # Spanish
+  - de  # German
+  - ar  # Arabic
+  - hi  # Hindi
+  - vi  # Vietnamese
+  - zh  # Chinese (Simplified)
+
+# Dataset characteristics
+has_unanswerable: false
+cross_lingual: true
+num_language_pairs: 49  # 7x7 matrix
+
+# Dataset splits
+splits:
+  - train
+  - dev
+  - test
+
+# Loading parameters
+use_huggingface: true
+hf_dataset_name: mlqa
+hf_dataset_config: null
+
+# Preprocessing
+max_seq_length: 384
+doc_stride: 128
+max_query_length: 64
