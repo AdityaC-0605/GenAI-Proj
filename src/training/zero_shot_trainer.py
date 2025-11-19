@@ -2,6 +2,7 @@
 
 import os
 import json
+import math
 import torch
 import logging
 from pathlib import Path
@@ -92,7 +93,21 @@ class ZeroShotTrainer:
         self.grad_accumulator = GradientAccumulator(gradient_accumulation_steps)
         
         # Initialize mixed precision manager
-        self.use_mixed_precision = use_mixed_precision and self.device.type in ['mps', 'cuda']
+        # Disable mixed precision for mT5 on MPS (causes NaN issues)
+        model_type = ''
+        if hasattr(model, 'model_name'):
+            model_type = model.model_name
+        elif hasattr(model, 'model') and hasattr(model.model, 'model_name'):
+            model_type = model.model.model_name
+        elif 'mt5' in str(type(model)).lower() or 't5' in str(type(model)).lower():
+            model_type = 'mt5'
+        
+        if 'mt5' in model_type.lower() and self.device.type == 'mps':
+            logger.warning("Disabling mixed precision for mT5 on MPS to avoid NaN issues")
+            self.use_mixed_precision = False
+        else:
+            self.use_mixed_precision = use_mixed_precision and self.device.type in ['mps', 'cuda']
+        
         if self.use_mixed_precision:
             self.mixed_precision_manager = MixedPrecisionManager(device=self.device)
         else:
@@ -206,20 +221,44 @@ class ZeroShotTrainer:
             else:
                 loss = self._train_step_standard(batch)
             
+            # Skip NaN losses
+            if isinstance(loss, torch.Tensor):
+                if torch.isnan(loss):
+                    logger.warning(f"NaN loss at batch {batch_idx + 1}, skipping...")
+                    continue
+            elif isinstance(loss, (int, float)):
+                if math.isnan(loss):
+                    logger.warning(f"NaN loss at batch {batch_idx + 1}, skipping...")
+                    continue
+            
             total_loss += loss
             num_batches += 1
             
             # Gradient accumulation
             if self.grad_accumulator.should_update(batch_idx + 1):
-                # Clip gradients
+                # Clip gradients (unscale first if using mixed precision)
                 if hasattr(self.model, 'model'):
-                    torch.nn.utils.clip_grad_norm_(
+                    if self.use_mixed_precision and self.mixed_precision_manager and self.mixed_precision_manager.scaler:
+                        self.mixed_precision_manager.unscale_gradients(self.optimizer)
+                    
+                    # Check for NaN/inf gradients before clipping
+                    total_norm = torch.nn.utils.clip_grad_norm_(
                         self.model.model.parameters(),
                         self.max_grad_norm
                     )
+                    
+                    # Check if gradients are valid
+                    if torch.isnan(total_norm) or torch.isinf(total_norm):
+                        logger.warning(f"Invalid gradient norm detected: {total_norm}. Skipping optimizer step.")
+                        self.optimizer.zero_grad()
+                        continue
                 
                 # Optimizer step
-                self.optimizer.step()
+                if self.use_mixed_precision and self.mixed_precision_manager:
+                    self.mixed_precision_manager.step(self.optimizer)
+                else:
+                    self.optimizer.step()
+                
                 self.scheduler.step()
                 self.optimizer.zero_grad()
                 self.global_step += 1
@@ -227,10 +266,17 @@ class ZeroShotTrainer:
             # Log progress
             if (batch_idx + 1) % 100 == 0:
                 avg_loss = total_loss / num_batches
-                logger.info(
-                    f"Epoch {self.current_epoch + 1}, Batch {batch_idx + 1}/{len(self.train_dataloader)}, "
-                    f"Loss: {avg_loss:.4f}"
-                )
+                # Check for NaN before logging
+                if torch.isnan(torch.tensor(avg_loss)) or str(avg_loss) == 'nan':
+                    logger.warning(
+                        f"Epoch {self.current_epoch + 1}, Batch {batch_idx + 1}/{len(self.train_dataloader)}, "
+                        f"Loss: nan (training may be unstable)"
+                    )
+                else:
+                    logger.info(
+                        f"Epoch {self.current_epoch + 1}, Batch {batch_idx + 1}/{len(self.train_dataloader)}, "
+                        f"Loss: {avg_loss:.4f}"
+                    )
         
         return total_loss / num_batches
     
@@ -244,28 +290,37 @@ class ZeroShotTrainer:
         Returns:
             Loss value
         """
-        loss = self.model.train_step(batch)
+        # Move batch to device
+        batch_device = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v 
+                      for k, v in batch.items()}
+        
+        # Forward pass - get loss tensor directly
+        if hasattr(self.model, 'model') and hasattr(self.model.model, 'forward'):
+            outputs = self.model.model(**batch_device)
+            if hasattr(outputs, 'loss'):
+                loss_tensor = outputs.loss
+            elif isinstance(outputs, tuple) and len(outputs) > 0:
+                loss_tensor = outputs[0]
+            else:
+                raise ValueError("Could not extract loss from model output")
+        else:
+            # Fallback to train_step if model structure is different
+            loss_value = self.model.train_step(batch)
+            return loss_value
+        
+        # Check for NaN
+        if torch.isnan(loss_tensor):
+            logger.warning("NaN loss detected! Skipping backward pass.")
+            return float('nan')
         
         # Scale loss for gradient accumulation
-        scaled_loss = loss / self.gradient_accumulation_steps
+        scaled_loss_tensor = loss_tensor / self.gradient_accumulation_steps
         
         # Backward pass
-        if hasattr(self.model, 'model'):
-            # Get the actual loss tensor for backward
-            batch_device = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v 
-                          for k, v in batch.items()}
-            
-            if hasattr(self.model.model, 'forward'):
-                outputs = self.model.model(**batch_device)
-                if hasattr(outputs, 'loss'):
-                    loss_tensor = outputs.loss
-                else:
-                    loss_tensor = outputs[0]
-                
-                scaled_loss_tensor = loss_tensor / self.gradient_accumulation_steps
-                scaled_loss_tensor.backward()
+        scaled_loss_tensor.backward()
         
-        return loss
+        # Return loss value for logging
+        return loss_tensor.item()
     
     def _train_step_mixed_precision(self, batch: Dict) -> float:
         """
@@ -277,30 +332,38 @@ class ZeroShotTrainer:
         Returns:
             Loss value
         """
+        # Move batch to device
+        batch_device = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v 
+                      for k, v in batch.items()}
+        
+        # Forward pass with mixed precision - get loss tensor directly
         with self.mixed_precision_manager.autocast():
-            loss = self.model.train_step(batch)
+            if hasattr(self.model, 'model') and hasattr(self.model.model, 'forward'):
+                outputs = self.model.model(**batch_device)
+                if hasattr(outputs, 'loss'):
+                    loss_tensor = outputs.loss
+                elif isinstance(outputs, tuple) and len(outputs) > 0:
+                    loss_tensor = outputs[0]
+                else:
+                    raise ValueError("Could not extract loss from model output")
+            else:
+                # Fallback
+                loss_value = self.model.train_step(batch)
+                return loss_value
+        
+        # Check for NaN
+        if torch.isnan(loss_tensor):
+            logger.warning("NaN loss detected! Skipping backward pass.")
+            return float('nan')
         
         # Scale loss for gradient accumulation
-        scaled_loss = loss / self.gradient_accumulation_steps
+        scaled_loss_tensor = loss_tensor / self.gradient_accumulation_steps
         
         # Backward pass with gradient scaling
-        if hasattr(self.model, 'model'):
-            batch_device = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v 
-                          for k, v in batch.items()}
-            
-            with self.mixed_precision_manager.autocast():
-                if hasattr(self.model.model, 'forward'):
-                    outputs = self.model.model(**batch_device)
-                    if hasattr(outputs, 'loss'):
-                        loss_tensor = outputs.loss
-                    else:
-                        loss_tensor = outputs[0]
-                    
-                    scaled_loss_tensor = loss_tensor / self.gradient_accumulation_steps
-            
-            self.mixed_precision_manager.backward(scaled_loss_tensor)
+        self.mixed_precision_manager.backward(scaled_loss_tensor)
         
-        return loss
+        # Return loss value for logging
+        return loss_tensor.item()
     
     def _validate(self) -> float:
         """

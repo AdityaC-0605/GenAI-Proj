@@ -227,13 +227,17 @@ def main():
     
     # Load configuration
     # For simplicity, using default config values
+    # Use lower learning rate for mT5 to avoid NaN issues
+    default_lr = 1e-5 if args.model == 'mt5' else 3e-5
+    default_batch_size = 4 if args.model == 'mt5' else 16
+    
     config = {
         'model_name': 'bert-base-multilingual-cased' if args.model == 'mbert' else 'google/mt5-base',
         'max_seq_length': 384,
         'doc_stride': 128,
         'max_answer_length': 50,
-        'batch_size': args.batch_size or 16,
-        'learning_rate': args.learning_rate or 3e-5,
+        'batch_size': args.batch_size or default_batch_size,
+        'learning_rate': args.learning_rate or default_lr,
         'num_epochs': args.num_epochs or 3,
         'warmup_ratio': 0.1,
         'gradient_accumulation_steps': 4,
