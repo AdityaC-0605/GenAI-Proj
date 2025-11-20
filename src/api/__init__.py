@@ -1,3 +1,5 @@
-"""API gateway module."""
+"""
+API module for RAG system.
+"""
 
-__all__ = []
+__version__ = "0.1.0"

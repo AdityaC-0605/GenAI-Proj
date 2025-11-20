@@ -1,0 +1,21 @@
+# ChromaDB-specific Configuration
+
+defaults:
+  - default
+  - _self_
+
+vector_db:
+  type: chromadb
+  persist_directory: data/vector_index/chromadb
+  collection_name: cross_lingual_qa
+  distance_metric: cosine
+  
+  # ChromaDB-specific settings
+  anonymized_telemetry: false
+  allow_reset: false
+  
+  # HNSW index parameters
+  hnsw_space: cosine  # Options: cosine, l2, ip
+  hnsw_construction_ef: 100
+  hnsw_search_ef: 100
+  hnsw_M: 16

@@ -1,561 +1,728 @@
-"""Streamlit Dashboard for Cross-Lingual Question Answering System."""
+"""Multi-page Streamlit Dashboard for Cross-Lingual Question Answering."""
 
 import streamlit as st
-import sys
-from pathlib import Path
-import json
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime
+import requests
+import os
+from dotenv import load_dotenv
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent))
-
-# Suppress urllib3 warnings (harmless on macOS)
-try:
-    from src.utils.warning_suppressor import suppress_urllib3_warnings
-    suppress_urllib3_warnings()
-except ImportError:
-    pass
+# Load environment variables
+load_dotenv()
 
 # Page configuration
 st.set_page_config(
-    page_title="Cross-Lingual QA Dashboard",
+    page_title="Cross-Lingual QA",
     page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS for styling
 st.markdown("""
 <style>
     .main-header {
-        font-size: 3rem;
+        font-size: 2.5rem;
         font-weight: bold;
         color: #1f77b4;
         text-align: center;
+        margin-bottom: 0.5rem;
+    }
+    .subtitle {
+        text-align: center;
+        color: #666;
+        font-size: 1.1rem;
         margin-bottom: 2rem;
     }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 0.5rem 0;
+    .status-row {
+        margin-bottom: 2rem;
     }
     .stButton>button {
         width: 100%;
     }
+    .metric-card {
+        background-color: #f0f2f6;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+    }
+    .feature-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 1rem;
+        margin: 1rem 0;
+        text-align: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Title
-st.markdown('<h1 class="main-header">🌍 Cross-Lingual Question Answering</h1>', unsafe_allow_html=True)
-st.markdown("---")
+# Initialize session state for storing results history
+if 'results_history' not in st.session_state:
+    st.session_state.results_history = []
 
-# Sidebar
-with st.sidebar:
-    st.image("https://via.placeholder.com/300x100/1f77b4/ffffff?text=CLQA+System", width=300)
-    st.markdown("## Navigation")
-    
-    page = st.radio(
-        "Select Page",
-        ["🏠 Home", "❓ Ask Questions", "📊 Model Comparison", "📈 Training Monitor", "📁 Dataset Explorer", "⚙️ Settings"],
-        label_visibility="collapsed"
-    )
-    
-    st.markdown("---")
-    st.markdown("### System Status")
-    
-    # Check API server status
+# Sidebar navigation
+st.sidebar.title("🌍 Navigation")
+page = st.sidebar.radio(
+    "Go to",
+    ["🏠 Home", "🔍 Question Answering", "📊 Results Analytics"],
+    label_visibility="collapsed"
+)
+
+# Helper functions
+def check_api_status():
+    """Check if API server is reachable."""
     try:
-        import requests
         response = requests.get("http://localhost:8000/health", timeout=2)
-        if response.status_code == 200:
-            health_data = response.json()
-            st.success("✅ API Server: Online")
-            st.info(f"📦 Models Loaded: {health_data.get('models_loaded', 0)}")
-        else:
-            st.error("❌ API Server: Error")
+        return response.status_code == 200
     except:
-        st.error("❌ API Server: Offline")
-        st.caption("Start with: uvicorn src.api.server:app")
-    
-    # Detect device dynamically
-    try:
-        import torch
-        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            device_info = "⚡ Device: MPS (Apple Silicon)"
-        elif torch.cuda.is_available():
-            device_info = f"⚡ Device: CUDA ({torch.cuda.get_device_name(0)})"
-        else:
-            device_info = "⚡ Device: CPU"
-        st.warning(device_info)
-    except:
-        st.warning("⚡ Device: Unknown")
-    
-    st.markdown("---")
-    st.markdown("### Quick Stats")
-    st.metric("Total Requests", "1,234")
-    st.metric("Avg Response Time", "245ms")
-    st.metric("Accuracy (F1)", "0.82")
+        return False
 
-# Home Page
+def check_openai_status():
+    """Check if OpenAI API key is configured."""
+    return bool(os.getenv('OPENAI_API_KEY'))
+
+# ============================================================================
+# HOME PAGE
+# ============================================================================
 if page == "🏠 Home":
+    st.markdown('<h1 class="main-header">🌍 Cross-Lingual Question Answering</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Multilingual AI-Powered Question Answering System</p>', unsafe_allow_html=True)
+    
+    # System status
+    st.markdown("### 🔧 System Status")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("### 🎯 Supported Languages")
-        st.markdown("""
-        **Question Languages:**
-        - 🇬🇧 English
-        - 🇪🇸 Spanish
-        - 🇫🇷 French
-        - 🇩🇪 German
-        - 🇨🇳 Chinese
-        - 🇸🇦 Arabic
-        
-        **Document Languages:**
-        - All above + Hindi, Japanese, Korean
-        """)
+        if check_api_status():
+            st.success("✅ API Server Online")
+        else:
+            st.error("❌ API Server Offline")
     
     with col2:
-        st.markdown("### 🤖 Available Models")
-        st.markdown("""
-        **mBERT (Extractive)**
-        - 110M parameters
-        - Fast inference
-        - Span extraction
-        
-        **mT5 (Generative)**
-        - 580M parameters
-        - Flexible answers
-        - Text generation
-        """)
+        st.info(f"📊 Results History: {len(st.session_state.results_history)}")
     
     with col3:
-        st.markdown("### 📊 Performance")
-        
-        # Sample performance data - use markdown table to avoid type issues
-        st.markdown("""
-        | Metric | mBERT | mT5 |
-        |--------|-------|-----|
-        | Exact Match | 0.75 | 0.71 |
-        | F1 Score | 0.82 | 0.79 |
-        | BLEU | 0.68 | 0.72 |
-        | Latency | 245ms | 380ms |
-        """)
+        st.info("🌍 Ready to Answer")
     
     st.markdown("---")
     
-    # Recent Activity
-    st.markdown("### 📝 Recent Activity")
+    # Welcome section
+    st.markdown("## 👋 Welcome!")
+    st.markdown("""
+    This dashboard provides an interactive interface for testing cross-lingual question answering capabilities 
+    using state-of-the-art multilingual models.
+    """)
+    
+    # Features
+    st.markdown("## ✨ Features")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### Latest Experiments")
-        experiments = [
-            {"name": "zero_shot_mbert", "date": "2025-11-16", "f1": 0.82},
-            {"name": "few_shot_mt5_10", "date": "2025-11-15", "f1": 0.79},
-            {"name": "baseline_comparison", "date": "2025-11-14", "f1": 0.75}
-        ]
-        for exp in experiments:
-            st.markdown(f"- **{exp['name']}** - {exp['date']} (F1: {exp['f1']})")
+        st.markdown("""
+        ### 🔵 mBERT Model
+        - Multilingual BERT architecture
+        - Finds exact text spans in context
+        - Fast inference (~100-200ms)
+        - High precision for factual questions
+        - Supports 100+ languages
+        """)
     
     with col2:
-        st.markdown("#### System Logs")
-        logs = [
-            "✅ Model checkpoint saved",
-            "📊 Evaluation completed on XQuAD",
-            "🔄 Training epoch 3/3 finished",
-            "📥 Dataset downloaded: MLQA"
-        ]
-        for log in logs:
-            st.markdown(f"- {log}")
+        st.markdown("""
+        ### 🟢 mT5 Model
+        - Multilingual T5 architecture
+        - Generates natural language answers
+        - Flexible response generation
+        - Better for explanatory questions
+        - Supports 100+ languages
+        """)
+    
+    st.markdown("---")
+    
+    # Supported languages
+    st.markdown("## 🌐 Supported Languages")
+    
+    languages = {
+        "🇬🇧 English": "en",
+        "🇪🇸 Spanish": "es",
+        "🇫🇷 French": "fr",
+        "🇩🇪 German": "de",
+        "🇨🇳 Chinese": "zh",
+        "🇸🇦 Arabic": "ar"
+    }
+    
+    cols = st.columns(3)
+    for idx, (lang_name, lang_code) in enumerate(languages.items()):
+        with cols[idx % 3]:
+            st.info(f"{lang_name}")
+    
+    st.markdown("---")
+    
+    # Quick start guide
+    st.markdown("## 🚀 Quick Start")
+    
+    st.markdown("""
+    1. **Navigate** to the Question Answering page using the sidebar
+    2. **Enter** your question and provide context
+    3. **Select** languages for question and context
+    4. **Choose** one or both models to compare
+    5. **Click** "Get Answers" to see results
+    6. **View** analytics in the Results Analytics page
+    """)
+    
+    # Statistics
+    if st.session_state.results_history:
+        st.markdown("---")
+        st.markdown("## 📈 Recent Activity")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Queries", len(st.session_state.results_history))
+        
+        with col2:
+            avg_conf = sum(r.get('confidence', 0) for r in st.session_state.results_history) / len(st.session_state.results_history)
+            st.metric("Avg Confidence", f"{avg_conf:.1%}")
+        
+        with col3:
+            avg_time = sum(r.get('processing_time_ms', 0) for r in st.session_state.results_history) / len(st.session_state.results_history)
+            st.metric("Avg Response Time", f"{avg_time:.0f}ms")
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; color: #666; padding: 1rem;'>
+        <p>Cross-Lingual Question Answering System | mBERT & mT5 Models</p>
+        <p style='font-size: 0.9rem;'>Built with Streamlit • Powered by Transformers</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Ask Questions Page
-elif page == "❓ Ask Questions":
-    st.markdown("## Ask a Question")
-    st.markdown("Enter your question and context in any supported language pair.")
+# ============================================================================
+# QUESTION ANSWERING PAGE
+# ============================================================================
+elif page == "🔍 Question Answering":
+    # Import the QA functionality
+    from datetime import datetime
     
-    col1, col2 = st.columns([2, 1])
+    def validate_inputs(question, context, use_mbert, use_mt5):
+        """Validate user inputs before submission."""
+        if not question or not question.strip():
+            return False, "❌ Please provide a question"
+        if not context or not context.strip():
+            return False, "❌ Please provide a context passage"
+        if not use_mbert and not use_mt5:
+            return False, "❌ Please select at least one model"
+        return True, ""
     
+    def send_prediction_request(question, context, q_lang, c_lang, model_name):
+        """Send prediction request to API server."""
+        response = requests.post(
+            "http://localhost:8000/predict",
+            json={
+                "question": question,
+                "context": context,
+                "question_language": q_lang,
+                "context_language": c_lang,
+                "model_name": model_name
+            },
+            timeout=30
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def handle_api_error(error, model_name):
+        """Handle API errors and display appropriate messages."""
+        if isinstance(error, requests.exceptions.ConnectionError):
+            st.error(f"❌ Cannot connect to API server for {model_name}. Please start the API server first.")
+            st.code("python -m uvicorn src.api.server:app --host 0.0.0.0 --port 8000")
+        elif isinstance(error, requests.exceptions.Timeout):
+            st.error(f"❌ Request timed out for {model_name}. The model might be loading or the query is too complex.")
+        elif isinstance(error, requests.exceptions.HTTPError):
+            st.error(f"❌ API Error for {model_name}: {error.response.status_code} - {error.response.text}")
+        else:
+            st.error(f"❌ Error with {model_name}: {str(error)}")
+    
+    def get_confidence_color(confidence):
+        """Get color coding for confidence score."""
+        if confidence >= 0.85:
+            return "green", "Excellent"
+        elif confidence >= 0.70:
+            return "yellow", "Good"
+        else:
+            return "orange", "Low"
+    
+    def display_single_result(model_name, result):
+        """Display result for a single model."""
+        st.markdown(f"### {model_name}")
+        
+        answer = result['answer']
+        confidence = result['confidence']
+        processing_time = result['processing_time_ms']
+        
+        st.markdown(f"**Answer:** {answer}")
+        
+        color, label = get_confidence_color(confidence)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if color == "green":
+                st.success(f"Confidence: {confidence:.2%} - {label}")
+            elif color == "yellow":
+                st.info(f"Confidence: {confidence:.2%} - {label}")
+            else:
+                st.warning(f"Confidence: {confidence:.2%} - {label}")
+        
+        with col2:
+            st.metric("Processing Time", f"{processing_time:.0f}ms")
+    
+    def display_comparison_results(mbert_result, mt5_result):
+        """Display side-by-side comparison of both models."""
+        st.markdown("## 📊 Results Comparison")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 🔵 mBERT")
+            st.markdown(f"**Answer:** {mbert_result['answer']}")
+            
+            color, label = get_confidence_color(mbert_result['confidence'])
+            if color == "green":
+                st.success(f"Confidence: {mbert_result['confidence']:.2%} - {label}")
+            elif color == "yellow":
+                st.info(f"Confidence: {mbert_result['confidence']:.2%} - {label}")
+            else:
+                st.warning(f"Confidence: {mbert_result['confidence']:.2%} - {label}")
+            
+            st.caption(f"⏱️ {mbert_result['processing_time_ms']:.0f}ms")
+        
+        with col2:
+            st.markdown("### 🟢 mT5")
+            st.markdown(f"**Answer:** {mt5_result['answer']}")
+            
+            color, label = get_confidence_color(mt5_result['confidence'])
+            if color == "green":
+                st.success(f"Confidence: {mt5_result['confidence']:.2%} - {label}")
+            elif color == "yellow":
+                st.info(f"Confidence: {mt5_result['confidence']:.2%} - {label}")
+            else:
+                st.warning(f"Confidence: {mt5_result['confidence']:.2%} - {label}")
+            
+            st.caption(f"⏱️ {mt5_result['processing_time_ms']:.0f}ms")
+        
+        st.markdown("---")
+        st.markdown("### 📈 Comparison Metrics")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            conf_diff = mt5_result['confidence'] - mbert_result['confidence']
+            better_model = "mT5" if conf_diff > 0 else "mBERT"
+            st.metric(
+                "Confidence Difference",
+                f"{abs(conf_diff):.2%}",
+                delta=f"{better_model} higher"
+            )
+        
+        with col2:
+            time_diff = mt5_result['processing_time_ms'] - mbert_result['processing_time_ms']
+            faster_model = "mBERT" if time_diff > 0 else "mT5"
+            st.metric(
+                "Speed Difference",
+                f"{abs(time_diff):.0f}ms",
+                delta=f"{faster_model} faster"
+            )
+        
+        with col3:
+            if mbert_result['answer'].strip().lower() == mt5_result['answer'].strip().lower():
+                st.info("✓ Answers Match")
+            else:
+                st.warning("✗ Answers Differ")
+    
+    # Main QA interface
+    st.markdown('<h1 class="main-header">🔍 Question Answering</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Ask questions and get answers from both models</p>', unsafe_allow_html=True)
+    
+    # System status
+    col1, col2 = st.columns(2)
     with col1:
+        if check_api_status():
+            st.success("✅ API Server Online")
+        else:
+            st.error("❌ API Server Offline")
+    with col2:
+        st.info("🌍 Cross-Lingual QA Ready")
+    
+    st.markdown("---")
+    
+    # Language options
+    LANGUAGES = {
+        "en": "🇬🇧 English",
+        "es": "🇪🇸 Spanish",
+        "fr": "🇫🇷 French",
+        "de": "🇩🇪 German",
+        "zh": "🇨🇳 Chinese",
+        "ar": "🇸🇦 Arabic"
+    }
+    
+    # Input interface
+    col_left, col_right = st.columns([2, 1])
+    
+    with col_left:
+        st.markdown("### 📝 Input")
+        
         question = st.text_input(
             "Question",
-            value="What is the capital of France?",
-            help="Enter your question in any supported language"
+            placeholder="Enter your question here...",
+            help="Type the question you want to ask"
         )
         
         context = st.text_area(
             "Context",
-            value="Paris is the capital and most populous city of France. With a population of more than 2 million people, it is the largest city in France and one of the most visited cities in the world.",
+            placeholder="Paste the context passage that contains the answer...",
             height=150,
-            help="Provide the context/document to search for the answer"
+            help="Provide the text passage containing the answer"
         )
     
-    with col2:
-        st.markdown("### Settings")
+    with col_right:
+        st.markdown("### ⚙️ Configuration")
         
         q_lang = st.selectbox(
             "Question Language",
-            ["en", "es", "fr", "de", "zh", "ar"],
-            format_func=lambda x: {"en": "🇬🇧 English", "es": "🇪🇸 Spanish", "fr": "🇫🇷 French", 
-                                   "de": "🇩🇪 German", "zh": "🇨🇳 Chinese", "ar": "🇸🇦 Arabic"}[x]
+            options=list(LANGUAGES.keys()),
+            format_func=lambda x: LANGUAGES[x],
+            index=0,
+            help="Select the language of your question"
         )
         
         c_lang = st.selectbox(
             "Context Language",
-            ["en", "es", "fr", "de", "zh", "ar", "hi", "ja", "ko"],
-            format_func=lambda x: {"en": "🇬🇧 English", "es": "🇪🇸 Spanish", "fr": "🇫🇷 French", 
-                                   "de": "🇩🇪 German", "zh": "🇨🇳 Chinese", "ar": "🇸🇦 Arabic",
-                                   "hi": "🇮🇳 Hindi", "ja": "🇯🇵 Japanese", "ko": "🇰🇷 Korean"}[x]
+            options=list(LANGUAGES.keys()),
+            format_func=lambda x: LANGUAGES[x],
+            index=0,
+            help="Select the language of your context"
         )
         
-        model = st.radio(
-            "Model",
-            ["mBERT", "mT5"],
-            help="Choose between extractive (mBERT) or generative (mT5) model"
-        )
+        st.markdown("---")
+        st.markdown("**Model Selection**")
         
-        submit = st.button("🔍 Get Answer", type="primary")
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            use_mbert = st.checkbox(
+                "mBERT",
+                value=True,
+                help="Multilingual BERT model"
+            )
+        
+        with col_b:
+            use_mt5 = st.checkbox(
+                "mT5",
+                value=True,
+                help="Multilingual T5 model"
+            )
+        
+        st.caption("💡 Select one or both models to compare")
     
-    if submit and question and context:
-        with st.spinner("Processing..."):
-            # Call the actual API
-            import requests
+    st.markdown("---")
+    
+    # Submit button
+    if st.button("🔍 Get Answers", type="primary", use_container_width=True):
+        is_valid, error_msg = validate_inputs(question, context, use_mbert, use_mt5)
+        
+        if not is_valid:
+            st.error(error_msg)
+        else:
+            # Check for language mismatch with comprehensive detection
+            import re
             
-            try:
-                # Prepare API request
-                api_url = "http://localhost:8000/predict"
-                # Convert model name to lowercase API format (mBERT -> mbert, mT5 -> mt5)
-                model_api_name = model.lower()
-                payload = {
-                    "question": question,
-                    "context": context,
-                    "question_language": q_lang,
-                    "context_language": c_lang,
-                    "model_name": model_api_name
+            # Detect actual language of context
+            detected_lang = None
+            context_lower = context.lower()
+            
+            # Check for non-Latin scripts first (most obvious)
+            chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', context))
+            if chinese_chars > len(context) * 0.15:
+                detected_lang = "zh"
+            
+            arabic_chars = len(re.findall(r'[\u0600-\u06ff]', context))
+            if arabic_chars > len(context) * 0.15:
+                detected_lang = "ar"
+            
+            # Check for Latin script languages by common words and patterns
+            if not detected_lang:
+                # German indicators
+                german_words = ['der', 'die', 'das', 'und', 'ist', 'von', 'wurde', 'als', 'einem', 'einer']
+                german_chars = ['ä', 'ö', 'ü', 'ß']
+                german_score = sum(1 for word in german_words if f' {word} ' in f' {context_lower} ')
+                german_score += sum(1 for char in german_chars if char in context_lower) * 2
+                
+                # Spanish indicators
+                spanish_words = ['el', 'la', 'de', 'que', 'es', 'en', 'por', 'como', 'del', 'los']
+                spanish_chars = ['ñ', 'á', 'é', 'í', 'ó', 'ú', '¿', '¡']
+                spanish_score = sum(1 for word in spanish_words if f' {word} ' in f' {context_lower} ')
+                spanish_score += sum(1 for char in spanish_chars if char in context_lower) * 2
+                
+                # French indicators
+                french_words = ['le', 'la', 'de', 'et', 'est', 'dans', 'pour', 'que', 'une', 'des']
+                french_chars = ['à', 'â', 'ç', 'è', 'é', 'ê', 'ë', 'î', 'ï', 'ô', 'ù', 'û']
+                french_score = sum(1 for word in french_words if f' {word} ' in f' {context_lower} ')
+                french_score += sum(1 for char in french_chars if char in context_lower) * 2
+                
+                # Determine language based on scores
+                scores = {
+                    'de': german_score,
+                    'es': spanish_score,
+                    'fr': french_score
                 }
                 
-                # Make API call
-                response = requests.post(api_url, json=payload, timeout=30)
+                max_score = max(scores.values())
+                if max_score >= 3:  # Threshold for detection
+                    detected_lang = max(scores, key=scores.get)
+            
+            # Show warning if mismatch detected
+            if detected_lang and detected_lang != c_lang:
+                lang_names = {
+                    'zh': '🇨🇳 Chinese',
+                    'ar': '🇸🇦 Arabic',
+                    'de': '🇩🇪 German',
+                    'es': '🇪🇸 Spanish',
+                    'fr': '🇫🇷 French'
+                }
+                st.warning(
+                    f"⚠️ **Language Mismatch Detected!**\n\n"
+                    f"Context appears to be in **{lang_names.get(detected_lang, detected_lang.upper())}**, "
+                    f"but you selected **{LANGUAGES[c_lang]}**.\n\n"
+                    f"Please select the correct language for accurate results. "
+                    f"Confidence scores may be reduced due to this mismatch."
+                )
+            
+            results = {}
+            
+            if use_mbert:
+                with st.spinner("🔵 Testing mBERT..."):
+                    try:
+                        results['mbert'] = send_prediction_request(
+                            question, context, q_lang, c_lang, "mbert"
+                        )
+                    except Exception as e:
+                        handle_api_error(e, "mBERT")
+            
+            if use_mt5:
+                with st.spinner("🟢 Testing mT5..."):
+                    try:
+                        results['mt5'] = send_prediction_request(
+                            question, context, q_lang, c_lang, "mt5"
+                        )
+                    except Exception as e:
+                        handle_api_error(e, "mT5")
+            
+            if results:
+                st.markdown("---")
                 
-                if response.status_code == 200:
-                    result = response.json()
-                    answer = result["answer"]
-                    confidence = result["confidence"]
-                    processing_time = result["processing_time_ms"]
-                    
-                    st.markdown("---")
-                    st.markdown("### 📝 Answer")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.markdown(f"**Answer:** {answer}")
-                    with col2:
-                        st.metric("Confidence", f"{confidence:.2%}")
-                    with col3:
-                        st.metric("Processing Time", f"{processing_time:.0f}ms")
-                    
-                    # Show highlighted context
-                    st.markdown("### 📄 Context with Answer")
-                    if answer and answer in context:
-                        highlighted = context.replace(answer, f"**:blue[{answer}]**")
-                        st.markdown(highlighted)
-                    else:
-                        st.markdown(context)
-                        if answer:
-                            st.info(f"💡 Generated answer: {answer}")
-                else:
-                    st.error(f"❌ API Error: {response.status_code} - {response.text}")
-                    
-            except requests.exceptions.ConnectionError:
-                st.error("❌ Cannot connect to API server. Please start the API server first.")
-                st.code("python -m uvicorn src.api.server:app --host 0.0.0.0 --port 8000")
-            except requests.exceptions.Timeout:
-                st.error("❌ Request timed out. The model might be loading or the query is too complex.")
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
-
-# Model Comparison Page
-elif page == "📊 Model Comparison":
-    st.markdown("## Model Performance Comparison")
+                # Store results in history
+                for model_name, result in results.items():
+                    st.session_state.results_history.append({
+                        'timestamp': datetime.now(),
+                        'model': model_name,
+                        'question': question,
+                        'answer': result['answer'],
+                        'confidence': result['confidence'],
+                        'processing_time_ms': result['processing_time_ms'],
+                        'q_lang': q_lang,
+                        'c_lang': c_lang
+                    })
+                
+                if 'mbert' in results and 'mt5' in results:
+                    display_comparison_results(results['mbert'], results['mt5'])
+                elif 'mbert' in results:
+                    st.markdown("## 📊 Results")
+                    display_single_result("🔵 mBERT", results['mbert'])
+                elif 'mt5' in results:
+                    st.markdown("## 📊 Results")
+                    display_single_result("🟢 mT5", results['mt5'])
     
-    # Language pair performance heatmap
-    st.markdown("### Performance Heatmap (F1 Score)")
+    st.markdown("---")
     
-    # Sample data
-    import numpy as np
-    
-    q_langs = ['en', 'es', 'fr', 'de', 'zh', 'ar']
-    c_langs = ['en', 'es', 'fr', 'de', 'zh', 'ar', 'hi', 'ja', 'ko']
-    
-    # Generate sample F1 scores
-    np.random.seed(42)
-    f1_scores = np.random.uniform(0.6, 0.9, (len(q_langs), len(c_langs)))
-    
-    fig = go.Figure(data=go.Heatmap(
-        z=f1_scores,
-        x=c_langs,
-        y=q_langs,
-        colorscale='YlOrRd',
-        text=np.round(f1_scores, 3),
-        texttemplate='%{text}',
-        textfont={"size": 10},
-        colorbar=dict(title="F1 Score")
-    ))
-    
-    fig.update_layout(
-        title="mBERT Cross-Lingual Performance",
-        xaxis_title="Context Language",
-        yaxis_title="Question Language",
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Side-by-side comparison
-    st.markdown("### Model Metrics Comparison")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### mBERT")
-        metrics_mbert = {
-            'Exact Match': 0.75,
-            'F1 Score': 0.82,
-            'Inference Time': '245ms',
-            'Memory Usage': '1.2GB',
-            'Parameters': '110M'
-        }
-        for metric, value in metrics_mbert.items():
-            st.metric(metric, value)
-    
-    with col2:
-        st.markdown("#### mT5")
-        metrics_mt5 = {
-            'Exact Match': 0.71,
-            'F1 Score': 0.79,
-            'Inference Time': '380ms',
-            'Memory Usage': '2.8GB',
-            'Parameters': '580M'
-        }
-        for metric, value in metrics_mt5.items():
-            st.metric(metric, value)
-    
-    # Performance by language pair category
-    st.markdown("### Performance by Language Pair Category")
-    
-    categories = ['Same Language', 'Similar Family', 'Different Family']
-    mbert_scores = [0.88, 0.79, 0.72]
-    mt5_scores = [0.85, 0.77, 0.70]
-    
-    fig = go.Figure(data=[
-        go.Bar(name='mBERT', x=categories, y=mbert_scores, marker_color='#1f77b4'),
-        go.Bar(name='mT5', x=categories, y=mt5_scores, marker_color='#ff7f0e')
-    ])
-    
-    fig.update_layout(
-        title="F1 Score by Language Pair Category",
-        xaxis_title="Category",
-        yaxis_title="F1 Score",
-        barmode='group',
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-# Training Monitor Page
-elif page == "📈 Training Monitor":
-    st.markdown("## Training Progress Monitor")
-    
-    # Training curves
-    st.markdown("### Training & Validation Loss")
-    
-    # Sample training data
-    epochs = list(range(1, 11))
-    train_loss = [2.5, 2.1, 1.8, 1.6, 1.4, 1.3, 1.2, 1.1, 1.05, 1.0]
-    val_loss = [2.6, 2.2, 1.9, 1.7, 1.5, 1.4, 1.35, 1.3, 1.28, 1.25]
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=epochs, y=train_loss, mode='lines+markers', name='Training Loss', line=dict(color='#1f77b4')))
-    fig.add_trace(go.Scatter(x=epochs, y=val_loss, mode='lines+markers', name='Validation Loss', line=dict(color='#ff7f0e')))
-    
-    fig.update_layout(
-        xaxis_title="Epoch",
-        yaxis_title="Loss",
-        height=400,
-        hovermode='x unified'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Few-shot learning curves
-    st.markdown("### Few-Shot Learning Curves")
-    
-    shots = [1, 5, 10, 50]
-    f1_scores = [0.65, 0.74, 0.79, 0.82]
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=shots, y=f1_scores, mode='lines+markers', line=dict(color='#2ca02c', width=3)))
-    
-    fig.update_layout(
-        title="Performance vs Number of Shots",
-        xaxis_title="Number of Shots",
-        yaxis_title="F1 Score",
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Current training status
-    st.markdown("### Current Training Status")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Current Epoch", "7/10")
-    with col2:
-        st.metric("Training Loss", "1.15")
-    with col3:
-        st.metric("Validation Loss", "1.32")
-    with col4:
-        st.metric("Learning Rate", "2.1e-5")
-    
-    # Progress bar
-    progress = st.progress(0.7)
-    st.markdown("**Training Progress:** 70% complete")
-
-# Dataset Explorer Page
-elif page == "📁 Dataset Explorer":
-    st.markdown("## Dataset Explorer")
-    
-    # Dataset selection
-    dataset = st.selectbox(
-        "Select Dataset",
-        ["SQuAD 2.0", "XQuAD", "MLQA", "TyDi QA"]
-    )
-    
-    # Dataset statistics
-    st.markdown(f"### {dataset} Statistics")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Total Examples", "130,319")
-    with col2:
-        st.metric("Languages", "11")
-    with col3:
-        st.metric("Avg Question Length", "12.4 tokens")
-    with col4:
-        st.metric("Avg Answer Length", "3.2 tokens")
-    
-    # Language distribution
-    st.markdown("### Language Distribution")
-    
-    lang_data = pd.DataFrame({
-        'Language': ['English', 'Spanish', 'French', 'German', 'Chinese', 'Arabic', 'Hindi', 'Japanese', 'Korean'],
-        'Count': [45000, 12000, 11000, 10500, 9800, 9200, 8500, 8000, 7500]
-    })
-    
-    fig = px.bar(lang_data, x='Language', y='Count', color='Count', color_continuous_scale='Blues')
-    fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Question type distribution
-    st.markdown("### Question Type Distribution")
-    
-    q_types = pd.DataFrame({
-        'Type': ['What', 'When', 'Where', 'Who', 'Why', 'How'],
-        'Percentage': [35, 15, 12, 18, 10, 10]
-    })
-    
-    fig = px.pie(q_types, values='Percentage', names='Type', hole=0.4)
-    fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Sample examples
-    st.markdown("### Sample Examples")
-    
-    sample_data = pd.DataFrame({
-        'Question': [
-            'What is the capital of France?',
-            'When was the Eiffel Tower built?',
-            'Who painted the Mona Lisa?'
-        ],
-        'Answer': ['Paris', '1889', 'Leonardo da Vinci'],
-        'Language': ['English', 'English', 'English']
-    })
-    
-    st.dataframe(sample_data, hide_index=True)
-
-# Settings Page
-elif page == "⚙️ Settings":
-    st.markdown("## System Settings")
-    
-    tab1, tab2, tab3 = st.tabs(["🔧 General", "🤖 Models", "🌐 API"])
-    
-    with tab1:
-        st.markdown("### General Settings")
+    # Info sections
+    with st.expander("ℹ️ About the Models"):
+        col1, col2 = st.columns(2)
         
-        device = st.selectbox(
-            "Compute Device",
-            ["MPS (Apple Silicon)", "CUDA (NVIDIA GPU)", "CPU"],
-            help="Select the device for model inference"
+        with col1:
+            st.markdown("""
+            **🔵 mBERT**
+            - Multilingual BERT model
+            - Finds exact text spans in context
+            - Fast and precise
+            - Best for factual questions
+            """)
+        
+        with col2:
+            st.markdown("""
+            **🟢 mT5**
+            - Multilingual T5 model
+            - Creates natural language answers
+            - More fluent responses
+            - Best for explanatory questions
+            """)
+    
+    with st.expander("🌍 Cross-Lingual Testing Tips"):
+        st.markdown("""
+        **Test cross-lingual capabilities:**
+        
+        1. Keep question in English
+        2. Change context language to Spanish/French/German/etc.
+        3. See if models can still answer correctly!
+        
+        **Example:**
+        - Question (English): "What is the capital of France?"
+        - Context (Spanish): "París es la capital de Francia..."
+        - Expected: Models should answer "Paris" or "París"
+        
+        💡 Check `TEST_QUESTIONS.md` for ready-to-use test questions!
+        """)
+
+# ============================================================================
+# RESULTS ANALYTICS PAGE
+# ============================================================================
+elif page == "📊 Results Analytics":
+    st.markdown('<h1 class="main-header">📊 Results Analytics</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Visualize and analyze model performance</p>', unsafe_allow_html=True)
+    
+    if not st.session_state.results_history:
+        st.info("📭 No results yet. Go to the Question Answering page to generate some results!")
+    else:
+        import pandas as pd
+        import plotly.express as px
+        import plotly.graph_objects as go
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(st.session_state.results_history)
+        
+        # Summary metrics
+        st.markdown("## 📈 Summary Statistics")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Queries", len(df))
+        
+        with col2:
+            avg_confidence = df['confidence'].mean()
+            st.metric("Avg Confidence", f"{avg_confidence:.1%}")
+        
+        with col3:
+            avg_time = df['processing_time_ms'].mean()
+            st.metric("Avg Response Time", f"{avg_time:.0f}ms")
+        
+        with col4:
+            unique_langs = df['c_lang'].nunique()
+            st.metric("Languages Used", unique_langs)
+        
+        st.markdown("---")
+        
+        # Model comparison
+        st.markdown("## 🔄 Model Comparison")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Confidence by model
+            fig_conf = px.box(
+                df,
+                x='model',
+                y='confidence',
+                color='model',
+                title='Confidence Distribution by Model',
+                labels={'model': 'Model', 'confidence': 'Confidence Score'},
+                color_discrete_map={'mbert': '#1f77b4', 'mt5': '#2ca02c'}
+            )
+            st.plotly_chart(fig_conf, use_container_width=True)
+        
+        with col2:
+            # Processing time by model
+            fig_time = px.box(
+                df,
+                x='model',
+                y='processing_time_ms',
+                color='model',
+                title='Processing Time by Model',
+                labels={'model': 'Model', 'processing_time_ms': 'Time (ms)'},
+                color_discrete_map={'mbert': '#1f77b4', 'mt5': '#2ca02c'}
+            )
+            st.plotly_chart(fig_time, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Language analysis
+        st.markdown("## 🌐 Language Analysis")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Language distribution
+            lang_counts = df['c_lang'].value_counts()
+            fig_lang = px.pie(
+                values=lang_counts.values,
+                names=lang_counts.index,
+                title='Context Language Distribution'
+            )
+            st.plotly_chart(fig_lang, use_container_width=True)
+        
+        with col2:
+            # Confidence by language
+            fig_lang_conf = px.bar(
+                df.groupby('c_lang')['confidence'].mean().reset_index(),
+                x='c_lang',
+                y='confidence',
+                title='Average Confidence by Language',
+                labels={'c_lang': 'Language', 'confidence': 'Avg Confidence'},
+                color='confidence',
+                color_continuous_scale='Blues'
+            )
+            st.plotly_chart(fig_lang_conf, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Timeline
+        st.markdown("## ⏱️ Performance Over Time")
+        
+        df_sorted = df.sort_values('timestamp')
+        
+        fig_timeline = go.Figure()
+        
+        for model in df['model'].unique():
+            model_data = df_sorted[df_sorted['model'] == model]
+            fig_timeline.add_trace(go.Scatter(
+                x=model_data['timestamp'],
+                y=model_data['confidence'],
+                mode='lines+markers',
+                name=model.upper(),
+                line=dict(width=2)
+            ))
+        
+        fig_timeline.update_layout(
+            title='Confidence Scores Over Time',
+            xaxis_title='Timestamp',
+            yaxis_title='Confidence',
+            hovermode='x unified'
         )
         
-        batch_size = st.slider("Batch Size", 1, 32, 8)
+        st.plotly_chart(fig_timeline, use_container_width=True)
         
-        max_length = st.slider("Max Sequence Length", 128, 512, 384)
+        st.markdown("---")
         
-        enable_cache = st.checkbox("Enable Model Caching", value=True)
+        # Recent results table
+        st.markdown("## 📋 Recent Results")
         
-        if st.button("💾 Save Settings"):
-            st.success("Settings saved successfully!")
-    
-    with tab2:
-        st.markdown("### Model Configuration")
+        display_df = df[['timestamp', 'model', 'question', 'answer', 'confidence', 'processing_time_ms']].tail(10)
+        display_df['confidence'] = display_df['confidence'].apply(lambda x: f"{x:.1%}")
+        display_df['processing_time_ms'] = display_df['processing_time_ms'].apply(lambda x: f"{x:.0f}ms")
+        display_df['timestamp'] = display_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
         
-        st.markdown("#### mBERT")
-        mbert_checkpoint = st.text_input("Checkpoint Path", "models/mbert/best_checkpoint.pt")
-        mbert_enabled = st.checkbox("Enable mBERT", value=True)
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        st.markdown("#### mT5")
-        mt5_checkpoint = st.text_input("Checkpoint Path ", "models/mt5/best_checkpoint.pt")
-        mt5_enabled = st.checkbox("Enable mT5", value=True)
-        
-        if st.button("🔄 Reload Models"):
-            with st.spinner("Reloading models..."):
-                import time
-                time.sleep(2)
-                st.success("Models reloaded successfully!")
-    
-    with tab3:
-        st.markdown("### API Configuration")
-        
-        api_host = st.text_input("API Host", "localhost")
-        api_port = st.number_input("API Port", 1000, 9999, 8000)
-        
-        enable_auth = st.checkbox("Enable Authentication", value=False)
-        
-        if enable_auth:
-            api_key = st.text_input("API Key", type="password")
-        
-        rate_limit = st.number_input("Rate Limit (requests/min)", 1, 1000, 100)
-        
-        if st.button("🚀 Restart API Server"):
-            with st.spinner("Restarting API server..."):
-                import time
-                time.sleep(2)
-                st.success("API server restarted successfully!")
-
-# Footer
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #666;'>
-    <p>Cross-Lingual Question Answering System v1.0.0</p>
-    <p>Built with ❤️ using Streamlit | Powered by mBERT & mT5</p>
-</div>
-""", unsafe_allow_html=True)
+        # Clear history button
+        st.markdown("---")
+        if st.button("🗑️ Clear Results History", type="secondary"):
+            st.session_state.results_history = []
+            st.rerun()

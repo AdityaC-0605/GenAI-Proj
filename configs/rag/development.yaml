@@ -1,0 +1,37 @@
+# Development Environment Configuration
+
+defaults:
+  - default
+  - _self_
+
+# Use faster models for development
+embedding:
+  model_name: paraphrase-multilingual-MiniLM-L12-v2  # Faster, smaller model
+  batch_size: 16
+
+generator:
+  type: mt5
+  model_name: google/mt5-base  # Smaller model for faster iteration
+
+# Reduced retrieval for faster testing
+retrieval:
+  top_k: 3
+  use_hybrid_search: false
+  use_reranking: false
+
+# Enable detailed logging for debugging
+logging:
+  level: DEBUG
+  log_retrieval_details: true
+  log_generation_details: true
+
+# Disable caching for development
+performance:
+  enable_query_cache: false
+  enable_embedding_cache: false
+
+# Development API settings
+api:
+  host: 127.0.0.1
+  port: 8000
+  enable_auth: false

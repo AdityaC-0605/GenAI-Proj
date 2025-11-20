@@ -274,6 +274,8 @@ class RequestHandler:
         """
         Process a QA request and return prediction.
         
+        Uses RAG backend for better accuracy without training.
+        
         Args:
             question: Question text
             context: Context text
@@ -284,23 +286,40 @@ class RequestHandler:
         Returns:
             QAPrediction with answer and metadata
         """
-        # Load model if not already loaded
-        model = self.model_manager.get_model(f"{model_name}_pretrained")
-        if model is None:
-            model = self.model_manager.load_model(
-                model_type=model_name,
-                model_id=f"{model_name}_pretrained"
+        try:
+            # Use RAG backend for better results
+            from src.inference.rag_backend import create_rag_backend
+            
+            backend = create_rag_backend(model_name)
+            prediction = backend.predict(
+                question=question,
+                context=context,
+                question_lang=question_lang,
+                context_lang=context_lang
             )
-        
-        # Generate prediction
-        prediction = model.predict(
-            question=question,
-            context=context,
-            question_lang=question_lang,
-            context_lang=context_lang
-        )
-        
-        return prediction
+            
+            return prediction
+            
+        except Exception as e:
+            logger.error(f"RAG backend failed: {e}, falling back to traditional model")
+            
+            # Fallback to traditional model loading
+            model = self.model_manager.get_model(f"{model_name}_pretrained")
+            if model is None:
+                model = self.model_manager.load_model(
+                    model_type=model_name,
+                    model_id=f"{model_name}_pretrained"
+                )
+            
+            # Generate prediction
+            prediction = model.predict(
+                question=question,
+                context=context,
+                question_lang=question_lang,
+                context_lang=context_lang
+            )
+            
+            return prediction
     
     def get_supported_languages(self) -> Dict[str, List[str]]:
         """

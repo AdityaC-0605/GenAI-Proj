@@ -1,0 +1,28 @@
+# mT5 Generator Configuration
+
+defaults:
+  - default
+  - _self_
+
+generator:
+  type: mt5
+  model_name: google/mt5-base  # Options: google/mt5-base, google/mt5-large
+  device: auto
+  
+  # Generation parameters
+  max_length: 100
+  min_length: 1
+  num_beams: 4
+  temperature: 1.0
+  top_k: 50
+  top_p: 0.95
+  repetition_penalty: 1.0
+  length_penalty: 1.0
+  early_stopping: true
+  
+  # Context window management
+  max_context_length: 512
+  num_contexts_to_use: 3
+  
+  # Prompt template
+  prompt_template: "question: {question} context: {context}"

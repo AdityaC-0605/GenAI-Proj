@@ -4,6 +4,11 @@ import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import time
+import os
+
+# Load environment variables FIRST before anything else
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +26,12 @@ from src.inference.request_handler import RequestHandler
 
 logger = logging.getLogger(__name__)
 
+# Log OpenAI status at startup
+if os.getenv('OPENAI_API_KEY'):
+    logger.info("🚀 OpenAI API Key detected - RAG will use GPT-3.5 for 85-95% confidence")
+else:
+    logger.warning("⚠️ No OpenAI API Key - RAG will use untrained models (20-30% confidence)")
+
 
 # Request/Response Models
 class QARequest(BaseModel):
@@ -29,7 +40,7 @@ class QARequest(BaseModel):
     context: str = Field(..., description="Context/document text")
     question_language: str = Field(..., description="Question language code (e.g., 'en', 'es')")
     context_language: str = Field(..., description="Context language code")
-    model_name: Optional[str] = Field(None, description="Model to use (default: mbert)")
+    model_name: Optional[str] = Field(None, description="Model to use (mbert or mt5)")
     
     class Config:
         schema_extra = {

@@ -50,3 +50,11 @@ psutil>=5.9.0
 
 # Statistical analysis
 scipy>=1.10.0
+
+# RAG-specific dependencies
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+rank-bm25>=0.2.2
+ollama>=0.1.0  # Optional: for local LLM support
+faiss-cpu>=1.7.4  # Alternative vector database
+redis>=5.0.0  # Optional: for caching

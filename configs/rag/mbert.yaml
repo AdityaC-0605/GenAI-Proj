@@ -1,0 +1,37 @@
+# RAG Configuration with mBERT Generator
+# mBERT is extractive (finds exact text spans) - no training needed!
+
+# Vector Database Configuration
+vector_db:
+  type: chromadb  # or 'faiss'
+  persist_directory: data/vector_index
+  collection_name: qa_contexts
+  distance_metric: cosine
+
+# Embedding Configuration
+embedding:
+  model_name: paraphrase-multilingual-MiniLM-L12-v2
+  device: auto  # auto, cpu, cuda, mps
+  batch_size: 32
+  normalize: true
+  cache_size: 1000
+
+# Retrieval Configuration
+retrieval:
+  top_k: 5
+  min_score: 0.0
+  use_reranker: false
+  reranker_model: cross-encoder/ms-marco-MiniLM-L-6-v2
+
+# Generator Configuration - mBERT (Extractive)
+generator:
+  type: mbert
+  model_name: bert-base-multilingual-cased
+  device: auto
+  num_contexts_to_use: 1  # mBERT works best with single context
+  
+# Logging Configuration
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: logs/rag_mbert.log

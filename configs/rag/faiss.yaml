@@ -1,0 +1,22 @@
+# FAISS-specific Configuration
+
+defaults:
+  - default
+  - _self_
+
+vector_db:
+  type: faiss
+  persist_directory: data/vector_index/faiss
+  collection_name: cross_lingual_qa
+  distance_metric: cosine
+  
+  # FAISS-specific settings
+  index_type: HNSW  # Options: Flat, HNSW, IVF
+  nlist: 100  # Number of clusters for IVF
+  nprobe: 10  # Number of clusters to search for IVF
+  M: 32  # Number of connections for HNSW
+  efConstruction: 40  # Construction parameter for HNSW
+  efSearch: 16  # Search parameter for HNSW
+  
+  # Metadata storage
+  metadata_file: metadata.pkl

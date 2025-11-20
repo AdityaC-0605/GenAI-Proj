@@ -1,0 +1,46 @@
+# Production Environment Configuration
+
+defaults:
+  - default
+  - _self_
+
+# Use best quality models for production
+embedding:
+  model_name: paraphrase-multilingual-mpnet-base-v2
+  batch_size: 64
+  cache_embeddings: true
+  cache_size: 50000
+
+generator:
+  type: mt5
+  model_name: google/mt5-large  # Better quality for production
+
+# Optimized retrieval settings
+retrieval:
+  top_k: 5
+  use_hybrid_search: true
+  hybrid_alpha: 0.7
+  use_reranking: true
+
+# Enable all performance optimizations
+performance:
+  enable_query_cache: true
+  query_cache_ttl: 3600
+  enable_embedding_cache: true
+  batch_processing: true
+  connection_pool_size: 20
+
+# Production logging
+logging:
+  level: INFO
+  log_retrieval_details: false
+  log_generation_details: false
+
+# Production API settings
+api:
+  host: 0.0.0.0
+  port: 8000
+  enable_cors: true
+  enable_auth: true
+  rate_limit: 100
+  timeout: 30

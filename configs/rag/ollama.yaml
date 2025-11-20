@@ -1,0 +1,30 @@
+# Ollama Local LLM Generator Configuration
+
+defaults:
+  - default
+  - _self_
+
+generator:
+  type: ollama
+  model_name: llama3  # Options: llama3, mistral, mixtral, phi, etc.
+  base_url: http://localhost:11434  # Ollama server URL
+  
+  # Generation parameters
+  num_predict: 100  # Max tokens to generate
+  temperature: 0.7
+  top_k: 40
+  top_p: 0.9
+  repeat_penalty: 1.1
+  
+  # Context window management
+  num_contexts_to_use: 3
+  
+  # Prompt template
+  prompt_template: |
+    Answer the question based on the context.
+    
+    Context: {context}
+    
+    Question: {question}
+    
+    Answer:
